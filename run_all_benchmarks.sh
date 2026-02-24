@@ -3,7 +3,6 @@
 # Compilation is always enabled.
 #
 # Usage:
-#   cd modal/
 #   bash run_all_benchmarks.sh
 
 set -euo pipefail
@@ -11,12 +10,12 @@ set -euo pipefail
 SCRIPT="run_benchmark_modal.py"
 
 MODELS=(
-    # "black-forest-labs/FLUX.1-dev"
-    # "Qwen/Qwen-Image"
+    "black-forest-labs/FLUX.1-dev"
+    "Qwen/Qwen-Image"
     "Lightricks/LTX-2"
 )
 
-BATCH_SIZES=(8)
+BATCH_SIZES=(1 4 8)
 
 run() {
     local model_id="$1"

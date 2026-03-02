@@ -11,7 +11,7 @@ Supported quant modes:
   none   – bf16 baseline (no quantization)
 
 Usage:
-    python benchmark.py --model_id "black-forest-labs/FLUX.1-dev" \\
+    python benchmark.py --model_id "black-forest-labs/FLUX.1-dev" \
         --quant_mode nvfp4 --enable_compilation
 """
 

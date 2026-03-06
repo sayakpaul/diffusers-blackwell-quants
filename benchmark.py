@@ -186,8 +186,19 @@ def get_filter_fn(model_id: str):
             return True
 
     else:
-        # FLUX: no filtering needed, quantize all layers
-        return None
+        # FLUX
+        def filter_fn(mod, fqn):
+            if not isinstance(mod, torch.nn.Linear):
+                return False
+            elif "embed" in fqn:
+                return False
+            elif fqn == "norm_out.linear":
+                return False
+            elif fqn == "proj_out":
+                return False
+            elif mod.in_features < 1024 or mod.out_features < 1024:
+                return False
+            return True
 
     return filter_fn
 

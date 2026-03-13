@@ -21,8 +21,10 @@ import json
 import os
 import traceback
 from dataclasses import asdict, dataclass, field
+from functools import wraps
 from typing import Any, Dict, List, Optional
 import torch
+from torch.utils._pytree import tree_map_only
 import torch.utils.benchmark as benchmark
 
 from diffusers import DiffusionPipeline
@@ -244,9 +246,41 @@ def setup_pipeline(model_id: str, quant_mode: str, torch_dtype=torch.bfloat16):
     return pipe
 
 
-def apply_compilation(pipe, fullgraph: bool = True):
+# source: @jbschlosser
+def clone_output_wrapper(f):
+    """Wrap a function to clone its CUDA tensor outputs, avoiding in-place operation
+    errors when using torch.compile with reduce-overhead mode (CUDA graphs)."""
+
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        outputs = f(*args, **kwargs)
+        return tree_map_only(
+            torch.Tensor, lambda t: t.clone() if t.is_cuda else t, outputs
+        )
+
+    return wrapped
+
+
+def apply_compilation(pipe, fullgraph: bool = True, torch_compile_mode: str = "default"):
     """Apply torch compile to the transformer."""
-    pipe.transformer.compile_repeated_blocks(fullgraph=fullgraph)
+    if torch_compile_mode in ("reduce-overhead", "max-autotune"):
+        # Make per-block compile work with CUDA graphs, by cloning the outputs
+        # of compiled regions and thus ensuring that subsequent in-place operations
+        # do not corrupt the data in memory addresses that future CUDA graph runs
+        # expect to use.
+        repeated_blocks = getattr(pipe.transformer, "_repeated_blocks", None)
+        if not repeated_blocks:
+            raise ValueError(
+                f"_repeated_blocks attribute is not defined on {pipe.transformer.__class__.__name__}. "
+                "Cannot apply reduce-overhead compilation."
+            )
+        for submod in pipe.transformer.modules():
+            if submod.__class__.__name__ in repeated_blocks:
+                submod.forward = clone_output_wrapper(
+                    torch.compile(submod.forward, mode=torch_compile_mode)
+                )
+    else:
+        pipe.transformer.compile_repeated_blocks(fullgraph=fullgraph)
 
 
 def run_warmup(pipe, call_kwargs: Dict[str, Any], num_warmup: int, seed: int):
@@ -385,7 +419,7 @@ def run_single_benchmark(model_id: str, config: Dict, args) -> BenchmarkResult:
         current_stage = "compile"
         if args.enable_compilation:
             print("\nStage 2: Applying compilation...")
-            apply_compilation(pipe)
+            apply_compilation(pipe, torch_compile_mode=args.torch_compile_mode)
         else:
             print("\nStage 2: Skipping compilation (disabled)")
 
@@ -459,6 +493,13 @@ def main():
         "--enable_compilation",
         action="store_true",
         help="Enable torch compile",
+    )
+    parser.add_argument(
+        "--torch_compile_mode",
+        type=str,
+        choices=["default", "reduce-overhead", "max-autotune"],
+        default="default",
+        help='torch.compile mode: "default", "reduce-overhead", or "max-autotune" (default: default)',
     )
     parser.add_argument(
         "--batch_size",

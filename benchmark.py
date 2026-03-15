@@ -22,7 +22,6 @@ import os
 import traceback
 from dataclasses import asdict, dataclass, field
 from functools import wraps
-from typing import Any, Dict, List, Optional
 import torch
 from torch.utils._pytree import tree_map_only
 import torch.utils.benchmark as benchmark
@@ -87,12 +86,13 @@ class BenchmarkResult:
     compilation_enabled: bool
     batch_size: int
     status: str  # "success", "failed_load", "failed_compile", "failed_warmup", "failed_benchmark", "failed_output"
-    error_message: Optional[str] = None
-    error_traceback: Optional[str] = None
-    latency_seconds: Optional[float] = None
-    peak_memory_gb: Optional[float] = None
-    output_path: Optional[str] = None
-    inference_params: Optional[Dict[str, Any]] = field(default_factory=dict)
+    torch_compile_mode: str | None = None
+    error_message: str | None = None
+    error_traceback: str | None = None
+    latency_seconds: float | None = None
+    peak_memory_gb: float | None = None
+    output_path: str | None = None
+    inference_params: dict | None = field(default_factory=dict)
 
 
 def flush():
@@ -102,17 +102,20 @@ def flush():
     torch.cuda.reset_peak_memory_stats()
 
 
-def get_run_name(model_id: str, quant_mode: str, compilation: bool, batch_size: int) -> str:
+def get_run_name(model_id: str, quant_mode: str, compilation: bool, batch_size: int, torch_compile_mode: str | None = None) -> str:
     """Generate a unique run name based on configuration."""
     model_name = model_id.replace("/", "_").replace("-", "_")
     parts = [model_name]
     parts.append("bf16" if quant_mode == "none" else quant_mode)
-    parts.append("compiled" if compilation else "nocompile")
+    if compilation and torch_compile_mode:
+        parts.append(f"compiled_{torch_compile_mode}")
+    else:
+        parts.append("compiled" if compilation else "nocompile")
     parts.append(f"bs{batch_size}")
     return "_".join(parts)
 
 
-def get_call_kwargs(config: Dict, batch_size: int) -> Dict[str, Any]:
+def get_call_kwargs(config: dict, batch_size: int) -> dict:
     """Get pipeline call kwargs with batch size applied."""
     call_kwargs = config["call_kwargs"].copy()
 
@@ -125,7 +128,7 @@ def get_call_kwargs(config: Dict, batch_size: int) -> Dict[str, Any]:
     return call_kwargs
 
 
-def get_warmup_kwargs(call_kwargs: Dict[str, Any]) -> Dict[str, Any]:
+def get_warmup_kwargs(call_kwargs: dict) -> dict:
     """Create warmup kwargs with reduced inference steps."""
     warmup_kwargs = call_kwargs.copy()
     actual_steps = warmup_kwargs.get("num_inference_steps", 28)
@@ -277,13 +280,13 @@ def apply_compilation(pipe, fullgraph: bool = True, torch_compile_mode: str = "d
         for submod in pipe.transformer.modules():
             if submod.__class__.__name__ in repeated_blocks:
                 submod.forward = clone_output_wrapper(
-                    torch.compile(submod.forward, mode=torch_compile_mode)
+                    torch.compile(submod.forward, mode=torch_compile_mode, fullgraph=True)
                 )
     else:
         pipe.transformer.compile_repeated_blocks(fullgraph=fullgraph)
 
 
-def run_warmup(pipe, call_kwargs: Dict[str, Any], num_warmup: int, seed: int):
+def run_warmup(pipe, call_kwargs: dict, num_warmup: int, seed: int):
     """Run warmup iterations with reduced steps."""
     warmup_kwargs = get_warmup_kwargs(call_kwargs)
     for i in range(num_warmup):
@@ -302,7 +305,7 @@ def benchmark_fn(f, *args, **kwargs) -> float:
     return t0.blocked_autorange(min_run_time=5.0).mean
 
 
-def run_benchmark(pipe, call_kwargs: Dict[str, Any], seed: int) -> tuple:
+def run_benchmark(pipe, call_kwargs: dict, seed: int) -> tuple:
     """Run benchmark and return latency and peak memory."""
     flush()
 
@@ -315,7 +318,7 @@ def run_benchmark(pipe, call_kwargs: Dict[str, Any], seed: int) -> tuple:
     return latency, peak_memory
 
 
-def generate_final_output(pipe, call_kwargs: Dict[str, Any], seed: int):
+def generate_final_output(pipe, call_kwargs: dict, seed: int):
     """Generate final output with fresh kwargs for fair visual comparison."""
     flush()
     result = pipe(**call_kwargs, generator=torch.manual_seed(seed))
@@ -323,10 +326,11 @@ def generate_final_output(pipe, call_kwargs: Dict[str, Any], seed: int):
 
 
 def save_output(
-    output, model_id: str, config: Dict, output_dir: str, quant_mode: str, compilation: bool, batch_size: int
+    output, model_id: str, config: dict, output_dir: str, quant_mode: str, compilation: bool, batch_size: int,
+    torch_compile_mode: str | None = None,
 ) -> str:
     """Save the generated output (image or video)."""
-    run_name = get_run_name(model_id, quant_mode, compilation, batch_size)
+    run_name = get_run_name(model_id, quant_mode, compilation, batch_size, torch_compile_mode)
     os.makedirs(output_dir, exist_ok=True)
 
     if config["type"] == "image":
@@ -382,7 +386,7 @@ def save_checkpoint(result: BenchmarkResult, output_dir: str):
     """Save benchmark result to a unique checkpoint file."""
     os.makedirs(output_dir, exist_ok=True)
     run_name = get_run_name(
-        result.model_id, result.quant_mode, result.compilation_enabled, result.batch_size
+        result.model_id, result.quant_mode, result.compilation_enabled, result.batch_size, result.torch_compile_mode
     )
     checkpoint_path = os.path.join(output_dir, f"{run_name}.json")
     with open(checkpoint_path, "w") as f:
@@ -390,12 +394,13 @@ def save_checkpoint(result: BenchmarkResult, output_dir: str):
     print(f"Checkpoint saved: {checkpoint_path}")
 
 
-def run_single_benchmark(model_id: str, config: Dict, args) -> BenchmarkResult:
+def run_single_benchmark(model_id: str, config: dict, args) -> BenchmarkResult:
     """Run a single benchmark with comprehensive error handling."""
     result = BenchmarkResult(
         model_id=model_id,
         quant_mode=args.quant_mode,
         compilation_enabled=args.enable_compilation,
+        torch_compile_mode=args.torch_compile_mode if args.enable_compilation else None,
         batch_size=args.batch_size,
         status="pending",
     )
@@ -445,7 +450,8 @@ def run_single_benchmark(model_id: str, config: Dict, args) -> BenchmarkResult:
         # Stage 6: Save output
         print("\nStage 6: Saving output...")
         output_path = save_output(
-            output, model_id, config, args.output_dir, args.quant_mode, args.enable_compilation, args.batch_size
+            output, model_id, config, args.output_dir, args.quant_mode, args.enable_compilation, args.batch_size,
+            args.torch_compile_mode if args.enable_compilation else None,
         )
         print(f"  Saved to: {output_path}")
 
@@ -544,6 +550,7 @@ def main():
     print(f"Status:      {result.status}")
     print(f"Quant mode:  {result.quant_mode}")
     print(f"Compilation: {result.compilation_enabled}")
+    print(f"Compile mode:{result.torch_compile_mode}")
     print(f"Batch size:  {result.batch_size}")
 
     if result.status == "success":

@@ -15,17 +15,29 @@ MODELS=(
 
 BATCH_SIZES=(1 4 8)
 
+QUANT_MODES=(
+    "none"
+    "nvfp4"
+    "fp8"
+)
+
+COMPILE_MODES=(
+    "default"
+    "reduce-overhead"
+)
+
 run() {
     local model_id="$1"
     local batch_size="$2"
-    local quant_mode="$3"   # "none", "nvfp4", or "fp8"
+    local quant_mode="$3"
+    local compile_mode="$4"
 
     echo ""
     echo "================================================================"
-    echo "  model     : ${model_id}"
-    echo "  batch_size: ${batch_size}"
-    echo "  quant_mode: ${quant_mode}"
-    echo "  compile   : enabled (reduce-overhead)"
+    echo "  model        : ${model_id}"
+    echo "  batch_size   : ${batch_size}"
+    echo "  quant_mode   : ${quant_mode}"
+    echo "  compile_mode : ${compile_mode}"
     echo "================================================================"
 
     time python benchmark.py \
@@ -33,13 +45,15 @@ run() {
         --batch_size "${batch_size}" \
         --enable_compilation \
         --quant_mode "${quant_mode}" \
-        --torch_compile_mode reduce-overhead
+        --torch_compile_mode "${compile_mode}"
 }
 
 for model in "${MODELS[@]}"; do
     for bs in "${BATCH_SIZES[@]}"; do
-        for quant in "none" "nvfp4" "fp8"; do
-            run "${model}" "${bs}" "${quant}"
+        for quant in "${QUANT_MODES[@]}"; do
+            for compile_mode in "${COMPILE_MODES[@]}"; do
+                run "${model}" "${bs}" "${quant}" "${compile_mode}"
+            done
         done
     done
 done

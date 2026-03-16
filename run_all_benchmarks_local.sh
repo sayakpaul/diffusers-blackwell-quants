@@ -9,17 +9,28 @@ set -euo pipefail
 
 MODELS=(
     "black-forest-labs/FLUX.1-dev"
-    # "Qwen/Qwen-Image"
+    "Qwen/Qwen-Image"
     "Lightricks/LTX-2"
 )
 
 BATCH_SIZES=(1 4 8)
 
+QUANT_MODES=(
+    "none"
+    "nvfp4"
+    "fp8"
+)
+
+COMPILE_MODES=(
+    "default"
+    "reduce-overhead"
+)
+
 run() {
     local model_id="$1"
     local batch_size="$2"
-    local quant_mode="$3"   # "none", "nvfp4", or "fp8"
-    local compile_mode="$4" # "default" or "reduce-overhead"
+    local quant_mode="$3"
+    local compile_mode="$4"
 
     echo ""
     echo "================================================================"
@@ -39,8 +50,8 @@ run() {
 
 for model in "${MODELS[@]}"; do
     for bs in "${BATCH_SIZES[@]}"; do
-        for quant in "none" "nvfp4" "fp8"; do
-            for compile_mode in "default" "reduce-overhead"; do
+        for quant in "${QUANT_MODES[@]}"; do
+            for compile_mode in "${COMPILE_MODES[@]}"; do
                 run "${model}" "${bs}" "${quant}" "${compile_mode}"
             done
         done

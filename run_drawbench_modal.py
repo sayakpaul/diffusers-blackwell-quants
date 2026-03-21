@@ -36,8 +36,8 @@ import modal
 # ---------------------------------------------------------------------------
 # Volume / paths
 # ---------------------------------------------------------------------------
-CACHE_DIR = Path("/cache")       # HF model weights
-OUTPUTS_DIR = Path("/outputs")   # generated images
+CACHE_DIR = Path("/cache")  # HF model weights
+OUTPUTS_DIR = Path("/outputs")  # generated images
 
 cache_volume = modal.Volume.from_name("hf-hub-cache", create_if_missing=True)
 output_volume = modal.Volume.from_name("drawbench-outputs", create_if_missing=True)
@@ -84,6 +84,7 @@ app = modal.App("drawbench-generation", image=image)
 # ---------------------------------------------------------------------------
 # Remote function
 # ---------------------------------------------------------------------------
+
 
 @app.function(
     gpu="B200",
@@ -172,11 +173,7 @@ def generate_drawbench_images(
     # ------------------------------------------------------------------ #
     # Base generation kwargs (prompt supplied per-batch, num_images fixed)
     # ------------------------------------------------------------------ #
-    base_kwargs = {
-        k: v
-        for k, v in MODEL_CONFIGS[model_id]["call_kwargs"].items()
-        if k != "prompt"
-    }
+    base_kwargs = {k: v for k, v in MODEL_CONFIGS[model_id]["call_kwargs"].items() if k != "prompt"}
     base_kwargs["num_images_per_prompt"] = 1
 
     # ------------------------------------------------------------------ #
@@ -214,27 +211,31 @@ def generate_drawbench_images(
 
                 img.save(img_path, format="PNG", pnginfo=pnginfo)
 
-                manifest.append({
-                    "prompt_idx": row["idx"],
-                    "prompt": row["prompt"],
-                    "category": row["category"],
-                    "image": str(img_path),
-                    "status": "success",
-                })
+                manifest.append(
+                    {
+                        "prompt_idx": row["idx"],
+                        "prompt": row["prompt"],
+                        "category": row["category"],
+                        "image": str(img_path),
+                        "status": "success",
+                    }
+                )
                 succeeded += 1
 
         except Exception as exc:  # noqa: BLE001
             print(f"  ERROR batch [{batch[0]['idx']}…{batch[-1]['idx']}]: {exc}")
             for row in batch:
-                manifest.append({
-                    "prompt_idx": row["idx"],
-                    "prompt": row["prompt"],
-                    "category": row["category"],
-                    "image": None,
-                    "status": "failed",
-                    "error": str(exc),
-                    "traceback": tb.format_exc(),
-                })
+                manifest.append(
+                    {
+                        "prompt_idx": row["idx"],
+                        "prompt": row["prompt"],
+                        "category": row["category"],
+                        "image": None,
+                        "status": "failed",
+                        "error": str(exc),
+                        "traceback": tb.format_exc(),
+                    }
+                )
                 failed += 1
 
         done = batch_start + len(batch)
@@ -267,6 +268,7 @@ def generate_drawbench_images(
 # ---------------------------------------------------------------------------
 # Local entrypoint
 # ---------------------------------------------------------------------------
+
 
 @app.local_entrypoint()
 def main(

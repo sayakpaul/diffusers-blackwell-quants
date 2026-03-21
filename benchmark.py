@@ -102,7 +102,9 @@ def flush():
     torch.cuda.reset_peak_memory_stats()
 
 
-def get_run_name(model_id: str, quant_mode: str, compilation: bool, batch_size: int, torch_compile_mode: str | None = None) -> str:
+def get_run_name(
+    model_id: str, quant_mode: str, compilation: bool, batch_size: int, torch_compile_mode: str | None = None
+) -> str:
     """Generate a unique run name based on configuration."""
     model_name = model_id.replace("/", "_").replace("-", "_")
     parts = [model_name]
@@ -139,6 +141,7 @@ def get_warmup_kwargs(call_kwargs: dict) -> dict:
 def get_filter_fn(model_id: str):
     """Return a quantization filter_fn appropriate for the given model."""
     if "Qwen" in model_id:
+
         def filter_fn(mod, fqn):
             if not isinstance(mod, torch.nn.Linear):
                 return False
@@ -163,6 +166,7 @@ def get_filter_fn(model_id: str):
             return True
 
     elif "LTX" in model_id:
+
         def filter_fn(mod, fqn):
             if not isinstance(mod, torch.nn.Linear):
                 return False
@@ -178,12 +182,7 @@ def get_filter_fn(model_id: str):
             elif "adaln_single" in fqn:
                 return False
             # skip cross-attention context projections (text stream, small activations)
-            elif (
-                ("add_q_proj" in fqn)
-                or ("add_k_proj" in fqn)
-                or ("add_v_proj" in fqn)
-                or ("to_add_out" in fqn)
-            ):
+            elif ("add_q_proj" in fqn) or ("add_k_proj" in fqn) or ("add_v_proj" in fqn) or ("to_add_out" in fqn):
                 return False
             # skip output norm linear for accuracy
             elif "norm_out" in fqn:
@@ -257,9 +256,7 @@ def clone_output_wrapper(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         outputs = f(*args, **kwargs)
-        return tree_map_only(
-            torch.Tensor, lambda t: t.clone() if t.is_cuda else t, outputs
-        )
+        return tree_map_only(torch.Tensor, lambda t: t.clone() if t.is_cuda else t, outputs)
 
     return wrapped
 
@@ -326,7 +323,13 @@ def generate_final_output(pipe, call_kwargs: dict, seed: int):
 
 
 def save_output(
-    output, model_id: str, config: dict, output_dir: str, quant_mode: str, compilation: bool, batch_size: int,
+    output,
+    model_id: str,
+    config: dict,
+    output_dir: str,
+    quant_mode: str,
+    compilation: bool,
+    batch_size: int,
     torch_compile_mode: str | None = None,
 ) -> str:
     """Save the generated output (image or video)."""
@@ -450,7 +453,13 @@ def run_single_benchmark(model_id: str, config: dict, args) -> BenchmarkResult:
         # Stage 6: Save output
         print("\nStage 6: Saving output...")
         output_path = save_output(
-            output, model_id, config, args.output_dir, args.quant_mode, args.enable_compilation, args.batch_size,
+            output,
+            model_id,
+            config,
+            args.output_dir,
+            args.quant_mode,
+            args.enable_compilation,
+            args.batch_size,
             args.torch_compile_mode if args.enable_compilation else None,
         )
         print(f"  Saved to: {output_path}")

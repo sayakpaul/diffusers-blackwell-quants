@@ -43,14 +43,7 @@ image = (
         "torchao",
         extra_options="--pre --index-url https://download.pytorch.org/whl/nightly/cu129",
     )
-    .uv_pip_install(
-        "transformers",
-        "accelerate",
-        "sentencepiece",
-        "protobuf",
-        "huggingface_hub[hf_xet]",
-        "av"
-    )
+    .uv_pip_install("transformers", "accelerate", "sentencepiece", "protobuf", "huggingface_hub[hf_xet]", "av")
     .apt_install("git")
     .uv_pip_install(
         "diffusers @ git+https://github.com/huggingface/diffusers.git",
@@ -63,6 +56,7 @@ app = modal.App("exotic-benchmark", image=image)
 # ---------------------------------------------------------------------------
 # Remote function
 # ---------------------------------------------------------------------------
+
 
 @app.function(
     gpu="B200",
@@ -121,6 +115,7 @@ def run_benchmark(
 # ---------------------------------------------------------------------------
 # Local entrypoint
 # ---------------------------------------------------------------------------
+
 
 @app.local_entrypoint()
 def main(

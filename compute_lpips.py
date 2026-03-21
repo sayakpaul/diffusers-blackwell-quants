@@ -30,10 +30,12 @@ from torchvision import transforms
 # Helpers
 # ---------------------------------------------------------------------------
 
-_to_tensor = transforms.Compose([
-    transforms.ToTensor(),           # [0, 1]
-    transforms.Normalize([0.5] * 3, [0.5] * 3),  # [-1, 1] as LPIPS expects
-])
+_to_tensor = transforms.Compose(
+    [
+        transforms.ToTensor(),  # [0, 1]
+        transforms.Normalize([0.5] * 3, [0.5] * 3),  # [-1, 1] as LPIPS expects
+    ]
+)
 
 
 def load_image_tensor(path: Path) -> torch.Tensor:
@@ -44,13 +46,14 @@ def load_image_tensor(path: Path) -> torch.Tensor:
 
 def prompt_idx_from_filename(fname: str) -> int:
     """Extract the zero-padded index from 'prompt_0042.png' → 42."""
-    stem = Path(fname).stem          # "prompt_0042"
+    stem = Path(fname).stem  # "prompt_0042"
     return int(stem.split("_")[1])
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def compute_lpips(
     baseline_dir: Path,
@@ -62,10 +65,7 @@ def compute_lpips(
     loss_fn.eval()
 
     # Collect baseline images keyed by prompt index.
-    baseline_images = {
-        prompt_idx_from_filename(p.name): p
-        for p in sorted(baseline_dir.glob("prompt_*.png"))
-    }
+    baseline_images = {prompt_idx_from_filename(p.name): p for p in sorted(baseline_dir.glob("prompt_*.png"))}
     if not baseline_images:
         raise FileNotFoundError(f"No prompt_*.png images found in {baseline_dir}")
 
@@ -74,10 +74,7 @@ def compute_lpips(
     all_results: dict[str, dict] = {}
 
     for cmp_dir in compare_dirs:
-        cmp_images = {
-            prompt_idx_from_filename(p.name): p
-            for p in sorted(cmp_dir.glob("prompt_*.png"))
-        }
+        cmp_images = {prompt_idx_from_filename(p.name): p for p in sorted(cmp_dir.glob("prompt_*.png"))}
         if not cmp_images:
             print(f"  WARNING: no images found in {cmp_dir}, skipping.")
             continue
@@ -121,6 +118,7 @@ def compute_lpips(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Compute LPIPS between bf16 baseline and quantized variants.")

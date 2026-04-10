@@ -9,7 +9,7 @@ Easy recipes to speed up latency of Flux, QwenImage, and LTX-2 with NVFP4 and MX
 > [!NOTE]
 > We demonstrate reproducible end-to-end inference speedups of up to 1.26x with MXFP8 and 1.68x with NVFP4 with diffusers and torchao on the Flux.1-Dev, QwenImage, and LTX-2 models on NVIDIA B200.  We also outline how we used selective quantization, CUDA Graphs, and LPIPS as a measure to iterate on accuracy and performance of these models.
 
-For more information (setup, results, discussions, etc.), please refer to our blog post (TODO).
+For more information (setup, results, discussions, etc.), please refer to [our blog post ](https://pytorch.org/blog/faster-diffusion-on-blackwell-mxfp8-and-nvfp4-with-diffusers-and-torchao/).
 
 Thanks to Claude Code for pairing 🫡
 
